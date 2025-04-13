@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>驾驶行为检测系统</title>
+    <!-- 引入CSS文件 -->
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/aiChat.css">
+    <!-- 替换FontAwesome的引用为最新的CDN链接 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 添加Chart.js库引用 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 添加CryptoJS库，用于讯飞语音识别API的签名计算 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <!-- 添加DatePicker库，用于日期选择 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
+    <!-- 添加Marked.js用于Markdown解析 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 添加highlight.js用于代码高亮 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.8.0/highlight.min.js"></script>
+    <!-- 用户头像配置 -->
+    <script>
+        // 用户头像配置
+        window.userAvatarConfig = {
+            defaultAvatar: "res/pic/aniya.jpg", // 默认用户头像路径
+            customAvatar: null, // 自定义用户头像路径（可通过JS修改）
+            aiAvatar: "res/pic/image.png" // AI助手头像路径
+        };
+    </script>
+</head>
+<body>
+    <header>
+        <h1>驾驶行为检测系统</h1>
+        <p>上传图片或视频进行驾驶行为目标检测</p>
+        <!-- 主导航菜单 -->
+        <nav class="main-nav">
+            <ul>
+                <li class="active" data-view="detection"><i class="fas fa-camera"></i> 检测</li>
+                <li data-view="dashboard"><i class="fas fa-chart-bar"></i> 数据看板</li>
+                <li data-view="history"><i class="fas fa-history"></i> 历史记录</li>
+                <li id="ai-chat-nav-item"><i class="fas fa-comments"></i> 安全问答</li>
+            </ul>
+        </nav>
+    </header>
+    
+    <div class="container">
+        <!-- 检测视图 -->
+        <div class="view-section active" id="detection-view">
+            <div class="upload-container" id="drop-area">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <label id="upload-label" for="file-input">点击或拖拽文件到此处</label>
+                <p class="upload-description">支持图片(JPG, PNG)和视频(MP4, MOV, AVI)格式</p>
+                <input type="file" id="file-input" name="file-input" accept="image/*,video/*">
+                <div class="file-type-badge" id="file-type-badge">
+                    <i class="fas fa-image"></i> 图片
+                </div>
+                <img id="image-preview" alt="预览图像">
+                <div id="video-preview-container">
+                    <video id="video-preview" controls></video>
+                </div>
+            </div>
+            
+            <div class="button-container">
+                <button id="predict-button" disabled>
+                    <i class="fas fa-search"></i>开始检测
+                </button>
+                <button id="reset-button">
+                    <i class="fas fa-redo"></i>重新上传
+                </button>
+            </div>
+            
+            <!-- 调试按钮 -->
+            <div class="button-container">
+                <button id="debug-button" style="background-color: #ea4335;">
+                    <i class="fas fa-bug"></i>显示上传调试信息
+                </button>
+            </div>
+            
+            <!-- 媒体结果展示区 -->
+            <div class="media-result-container" id="image-result-container">
+                <img src="" alt="检测结果" id="result-image">
+            </div>
+            <div class="media-result-container" id="video-result-container">
+                <video id="result-video" controls autoplay></video>
+            </div>
+            
+            <!-- 进度条容器（仅用于处理中显示，不与视频控制重叠） -->
+            <div class="progress-container" id="progress-container">
+                <div class="progress-bar-processing" id="progress-bar-processing" data-progress="0%"></div>
+            </div>
+            
+            <!-- 视频预警信息区域 -->
+            <div class="video-warnings-container" id="video-warnings-container">
+                <div class="warning-header">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>检测到预警行为</h3>
+                    <span class="warning-count" id="warning-count">0条</span>
+                </div>
+                <div class="warnings-list" id="warnings-list">
+                    <!-- 预警列表将通过JavaScript动态生成 -->
+                </div>
+            </div>
+            
+            <!-- 结果区域重组 -->
+            <div class="results-container" id="results-container">
+                <div class="results-tabs">
+                    <div class="results-tab active" data-tab="statistics-tab">检测统计</div>
+                    <div class="results-tab" data-tab="details-tab">详细信息</div>
+                    <div class="results-tab" data-tab="charts-tab">图表分析</div>
+                </div>
+                
+                <!-- 统计面板 -->
+                <div class="results-pane active" id="statistics-tab">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">总检测数量</div>
+                            <div class="stat-value" id="total-count">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">检测类别数</div>
+                            <div class="stat-value" id="class-count">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">平均可信度</div>
+                            <div class="stat-value" id="avg-confidence">0%</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">最大可信度</div>
+                            <div class="stat-value" id="max-confidence">0%</div>
+                        </div>
+                    </div>
+                    
+                    <div class="classes-summary" id="classes-summary">
+                        <!-- 类别摘要将通过JavaScript动态生成 -->
+                    </div>
+                    
+                    <!-- 驾驶建议区域 -->
+                    <div class="driving-suggestions" id="driving-suggestions">
+                        <div class="suggestion-header">
+                            <i class="fas fa-lightbulb"></i>
+                            <h3>智能驾驶建议</h3>
+                        </div>
+                        <div class="suggestion-content" id="suggestion-content">
+                            <!-- 驾驶建议将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 详细信息面板 -->
+                <div class="results-pane" id="details-tab">
+                    <div id="results-list"></div>
+                    <div class="pagination" id="pagination-controls"></div>
+                </div>
+                
+                <!-- 图表分析面板 -->
+                <div class="results-pane" id="charts-tab">
+                    <div class="charts-container">
+                        <div class="chart-card">
+                            <div class="chart-title">类别检测数量</div>
+                            <div class="chart-container">
+                                <canvas id="categoryCountChart"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <div class="chart-title">类别可信度比较</div>
+                            <div class="chart-container">
+                                <canvas id="confidenceChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 数据看板视图 -->
+        <div class="view-section" id="dashboard-view">
+            <h2><i class="fas fa-chart-bar"></i> 数据看板</h2>
+            
+            <!-- 数据看板卡片网格 -->
+            <div class="dashboard-grid">
+                <div class="dashboard-card">
+                    <div class="dashboard-icon">
+                        <i class="fas fa-binoculars"></i>
+                    </div>
+                    <div class="dashboard-data">
+                        <h3>总检测数</h3>
+                        <div class="dashboard-value" id="dash-total-detections">0</div>
+                    </div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="dashboard-icon">
+                        <i class="fas fa-calendar-day"></i>
+                    </div>
+                    <div class="dashboard-data">
+                        <h3>当日检测数</h3>
+                        <div class="dashboard-value" id="dash-today-detections">0</div>
+                    </div>
+                </div>
+                <div class="dashboard-card warning-card">
+                    <div class="dashboard-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="dashboard-data">
+                        <h3>总预警数</h3>
+                        <div class="dashboard-value" id="dash-total-warnings">0</div>
+                    </div>
+                </div>
+                <div class="dashboard-card warning-card">
+                    <div class="dashboard-icon">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div class="dashboard-data">
+                        <h3>当日预警数</h3>
+                        <div class="dashboard-value" id="dash-today-warnings">0</div>
+                    </div>
+                </div>
+                <div class="dashboard-card ai-card">
+                    <div class="dashboard-icon">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="dashboard-data">
+                        <h3>AI问答总数</h3>
+                        <div class="dashboard-value" id="dash-total-questions">0</div>
+                    </div>
+                </div>
+                <div class="dashboard-card ai-card">
+                    <div class="dashboard-icon">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <div class="dashboard-data">
+                        <h3>当日问答数</h3>
+                        <div class="dashboard-value" id="dash-today-questions">0</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 趋势图表区域 -->
+            <div class="dashboard-charts">
+                <div class="dashboard-chart-container">
+                    <h3>最近7天检测趋势</h3>
+                    <canvas id="detection-trend-chart"></canvas>
+                </div>
+                <div class="dashboard-chart-container">
+                    <h3>预警占比分析</h3>
+                    <canvas id="warning-ratio-chart"></canvas>
+                </div>
+                <div class="dashboard-chart-container">
+                    <h3>驾驶行为类别分布</h3>
+                    <canvas id="behavior-distribution-chart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 历史记录视图 -->
+        <div class="view-section" id="history-view">
+            <h2><i class="fas fa-history"></i> 历史检测记录</h2>
+            
+            <!-- 筛选工具栏 -->
+            <div class="history-filter-bar">
+                <div class="filter-group">
+                    <label for="filter-file-type">文件类型:</label>
+                    <select id="filter-file-type" name="filter-file-type">
+                        <option value="">全部</option>
+                        <option value="image">图片</option>
+                        <option value="video">视频</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-class">检测类别:</label>
+                    <select id="filter-class" name="filter-class">
+                        <option value="">全部</option>
+                        <option value="安全驾驶">安全驾驶</option>
+                        <option value="发短信-右">发短信-右</option>
+                        <option value="打电话-右">打电话-右</option>
+                        <option value="发短信-左">发短信-左</option>
+                        <option value="打电话-左">打电话-左</option>
+                        <option value="操作无线电">操作无线电</option>
+                        <option value="喝酒">喝酒</option>
+                        <option value="向后伸手">向后伸手</option>
+                        <option value="发型和化妆">发型和化妆</option>
+                    </select>
+                </div>
+                <div class="filter-group date-range">
+                    <label for="filter-start-date">开始日期:</label>
+                    <input type="text" id="filter-start-date" name="filter-start-date" class="date-picker" placeholder="开始日期">
+                </div>
+                <div class="filter-group date-range">
+                    <label for="filter-end-date">结束日期:</label>
+                    <input type="text" id="filter-end-date" name="filter-end-date" class="date-picker" placeholder="结束日期">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-warning">预警状态:</label>
+                    <select id="filter-warning">
+                        <option value="">全部</option>
+                        <option value="true">预警</option>
+                        <option value="false">正常</option>
+                    </select>
+                </div>
+                <button id="apply-filters" class="filter-button">
+                    <i class="fas fa-filter"></i> 应用筛选
+                </button>
+                <button id="reset-filters" class="filter-button reset">
+                    <i class="fas fa-redo"></i> 重置
+                </button>
+            </div>
+            
+            <!-- 历史记录表格 -->
+            <div class="history-table-container">
+                <table class="history-table" id="history-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>文件名</th>
+                            <th>类型</th>
+                            <th>检测时间</th>
+                            <th>检测数</th>
+                            <th>检测类别</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table-body">
+                        <!-- 历史记录将通过JavaScript动态生成 -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 分页控件 -->
+            <div class="history-pagination" id="history-pagination">
+                <button id="prev-page" class="page-button" disabled>
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <div id="page-numbers" class="page-numbers">
+                    <!-- 页码将通过JavaScript动态生成 -->
+                </div>
+                <button id="next-page" class="page-button">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 调试信息弹窗 -->
+        <div id="debug-modal" class="debug-modal">
+            <div class="debug-modal-content">
+                <span class="close-debug-modal">&times;</span>
+                <h2>视频上传调试信息</h2>
+                <div id="debug-info"></div>
+                <div id="network-requests" class="network-requests">
+                    <h3>网络请求日志</h3>
+                    <ul id="request-log"></ul>
+                </div>
+                <button id="check-server-status" class="debug-button">
+                    <i class="fas fa-server"></i>检查服务器状态
+                </button>
+            </div>
+        </div>
+        
+        <!-- 历史记录详情弹窗 -->
+        <div id="history-detail-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-modal">&times;</span>
+                <h2>检测详情</h2>
+                <div class="history-detail-content">
+                    <div class="detail-media">
+                        <img id="detail-image" alt="检测结果">
+                        <video id="detail-video" controls></video>
+                    </div>
+                    <div class="detail-info">
+                        <div class="detail-header">
+                            <h3 id="detail-file-name"></h3>
+                            <span id="detail-time"></span>
+                        </div>
+                        <div class="detail-stats">
+                            <div class="detail-stat">
+                                <span class="detail-label">检测数量:</span>
+                                <span id="detail-count" class="detail-value"></span>
+                            </div>
+                            <div class="detail-stat">
+                                <span class="detail-label">类别数:</span>
+                                <span id="detail-class-count" class="detail-value"></span>
+                            </div>
+                            <div class="detail-stat">
+                                <span class="detail-label">平均可信度:</span>
+                                <span id="detail-avg-conf" class="detail-value"></span>
+                            </div>
+                        </div>
+                        <div class="detail-classes" id="detail-classes">
+                            <!-- 检测类别详情将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="loader" id="loader"></div>
+        
+        <div class="error-message" id="error-message"></div>
+    </div>
+    
+    <!-- AI 对话全屏界面 -->
+    <div class="ai-chat-fullscreen" id="ai-chat-fullscreen">
+        <div class="ai-chat-fullscreen-header">
+            <button id="back-button" class="back-button">
+                <i class="fas fa-arrow-left"></i> 返回主页
+            </button>
+            <h2>安全驾驶智能助手</h2>
+            <button id="new-chat-button" class="new-chat-button">
+                <i class="fas fa-plus"></i> 新对话
+            </button>
+        </div>
+        <div class="ai-chat-fullscreen-content">
+            <div class="ai-chat-messages" id="ai-chat-messages">
+                <!-- 对话消息会被动态添加到这里 -->
+            </div>
+        </div>
+        <div class="ai-chat-fullscreen-input">
+            <textarea id="user-input" placeholder="请输入您的问题..."></textarea>
+            <div class="ai-input-buttons">
+                <button id="voice-input-button" title="语音输入">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button id="send-message-button" title="发送">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 引入JS模块文件 -->
+    <script src="js/config.js"></script>
+    <script src="js/uiUtils.js"></script>
+    <script src="js/videoHandler.js"></script>
+    <script src="js/resultDisplay.js"></script>
+    <script src="js/speechRecognition.js"></script>
+    <script src="js/aiChat.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/historyView.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/debug.js"></script>
+</body>
+</html>

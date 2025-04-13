@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>车内行为检测系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding-top: 56px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+        }
+        
+        .main-content {
+            flex: 1;
+            padding: 20px;
+        }
+        
+        .upload-container {
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 2px dashed #dee2e6;
+            transition: all 0.3s;
+        }
+        
+        .upload-container:hover {
+            border-color: #6c757d;
+        }
+        
+        .drop-zone {
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .drop-zone:hover {
+            background-color: #e9ecef;
+        }
+        
+        .drop-zone-active {
+            background-color: #e9ecef;
+            border: 2px dashed #007bff;
+        }
+        
+        .preview-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .preview-container img,
+        .preview-container video {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .result-container {
+            margin-top: 30px;
+        }
+        
+        #resultImage,
+        #resultVideo {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+        }
+        
+        .card-header {
+            font-weight: bold;
+        }
+        
+        .detection-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        
+        .confidence-bar {
+            height: 5px;
+            margin-top: 5px;
+            border-radius: 2px;
+        }
+        
+        .statistics-card {
+            background-color: #f9f9f9;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+        
+        .stat-label {
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .stat-value {
+            font-size: 1.2em;
+        }
+        
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+        
+        #loadingSpinner {
+            display: none;
+        }
+        
+        footer {
+            background-color: #343a40;
+            color: white;
+            text-align: center;
+            padding: 20px 0;
+            margin-top: auto;
+        }
+        
+        .chart-container {
+            height: 200px;
+            margin-bottom: 20px;
+        }
+
+        /* 预警信息样式 */
+        .warning-container {
+            background-color: #fff3cd;
+            border-left: 5px solid #ffc107;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .warning-title {
+            display: flex;
+            align-items: center;
+            color: #856404;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .warning-title i {
+            font-size: 1.5rem;
+            margin-right: 10px;
+        }
+        
+        .warning-count {
+            background-color: #ffc107;
+            color: #212529;
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 20px;
+            margin-left: 10px;
+        }
+        
+        .warning-item {
+            margin-bottom: 8px;
+            padding: 8px;
+            background-color: rgba(255, 255, 255, 0.7);
+            border-radius: 4px;
+        }
+        
+        .warning-class {
+            font-weight: bold;
+            color: #dc3545;
+        }
+        
+        .warning-duration {
+            font-style: italic;
+            color: #6c757d;
+        }
+        
+        .warning-frame {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        
+        .blink {
+            animation: blink-animation 1s steps(5, start) infinite;
+        }
+        
+        @keyframes blink-animation {
+            to {
+                visibility: hidden;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+            <a class="navbar-brand" href="#">车内行为检测系统</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#">主页</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="history.html">历史记录</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="dashboard.html">数据看板</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="faq.html">安全问答</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-content container">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="text-center mb-4">智能车内行为检测系统</h1>
+                <p class="text-center lead">
+                    上传图片或视频，系统将自动识别车内驾驶行为，并提供安全驾驶建议
+                </p>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="upload-container">
+                    <h3 class="text-center mb-3">上传文件</h3>
+                    <div id="dropZone" class="drop-zone">
+                        <p><i class="bi bi-cloud-upload fs-1"></i></p>
+                        <p>拖放文件到这里或点击选择文件</p>
+                        <p class="text-muted small">支持的格式: JPG, PNG, MP4</p>
+                        <input type="file" id="fileInput" class="d-none" accept=".jpg,.jpeg,.png,.mp4">
+                    </div>
+                    <div id="previewContainer" class="preview-container mt-3" style="display:none;">
+                        <h4>预览</h4>
+                        <img id="previewImage" style="display:none;">
+                        <video id="previewVideo" controls style="display:none;"></video>
+                    </div>
+                    <div class="mt-3 text-center">
+                        <button id="uploadButton" class="btn btn-primary" disabled>开始检测</button>
+                        <button id="clearButton" class="btn btn-secondary" disabled>清除</button>
+                    </div>
+                    <div id="progressContainer" class="progress-container">
+                        <div class="progress" style="height: 20px;">
+                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                 role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0"
+                                 aria-valuemax="100">0%
+                            </div>
+                        </div>
+                        <p id="progressText" class="text-center mt-2">准备处理...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card result-container" id="resultContainer" style="display:none;">
+                    <div class="card-header bg-primary text-white">
+                        检测结果
+                    </div>
+                    <div class="card-body">
+                        <div id="loadingSpinner" class="text-center my-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">处理中...</span>
+                            </div>
+                            <p class="mt-2">正在处理您的文件，请稍候...</p>
+                        </div>
+                        <div id="resultContent" style="display:none;">
+                            <!-- 视频预警信息区域 -->
+                            <div id="warningContainer" class="warning-container" style="display:none;">
+                                <div class="warning-title">
+                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                    <span>预警提醒</span>
+                                    <span class="warning-count" id="warningCount">0</span>
+                                </div>
+                                <div id="warningList">
+                                    <!-- 预警项将在这里动态添加 -->
+                                </div>
+                            </div>
+                            
+                            <div class="text-center mb-4">
+                                <img id="resultImage" style="display:none;">
+                                <video id="resultVideo" controls style="display:none;"></video>
+                            </div>
+                            <div class="row">
+                                <div class="col-12 mb-3">
+                                    <div class="card statistics-card">
+                                        <div class="card-header">
+                                            检测统计
+                                        </div>
+                                        <div class="card-body" id="statisticsContainer">
+                                            <!-- 统计信息将在这里动态添加 -->
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            检测详情
+                                        </div>
+                                        <div class="card-body">
+                                            <div id="detectionList">
+                                                <!-- 检测详情将在这里动态添加 -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 驾驶建议卡片 -->
+                <div class="card" id="suggestionCard" style="display:none;">
+                    <div class="card-header bg-info text-white">
+                        安全驾驶建议
+                    </div>
+                    <div class="card-body">
+                        <div id="suggestionContent">
+                            <!-- 建议内容将在这里动态添加 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 车内行为检测系统 - 安全驾驶智能监测平台</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('fileInput');
+            const previewContainer = document.getElementById('previewContainer');
+            const previewImage = document.getElementById('previewImage');
+            const previewVideo = document.getElementById('previewVideo');
+            const uploadButton = document.getElementById('uploadButton');
+            const clearButton = document.getElementById('clearButton');
+            const resultContainer = document.getElementById('resultContainer');
+            const resultImage = document.getElementById('resultImage');
+            const resultVideo = document.getElementById('resultVideo');
+            const resultContent = document.getElementById('resultContent');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const statisticsContainer = document.getElementById('statisticsContainer');
+            const detectionList = document.getElementById('detectionList');
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const suggestionCard = document.getElementById('suggestionCard');
+            const suggestionContent = document.getElementById('suggestionContent');
+            const warningContainer = document.getElementById('warningContainer');
+            const warningCount = document.getElementById('warningCount');
+            const warningList = document.getElementById('warningList');
+
+            let selectedFile = null;
+            let fileType = null;
+            let progressInterval = null;
+
+            // 拖放事件处理
+            dropZone.addEventListener('dragover', e => {
+                e.preventDefault();
+                dropZone.classList.add('drop-zone-active');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('drop-zone-active');
+            });
+
+            dropZone.addEventListener('drop', e => {
+                e.preventDefault();
+                dropZone.classList.remove('drop-zone-active');
+
+                if (e.dataTransfer.files.length) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            dropZone.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', e => {
+                if (e.target.files.length) {
+                    handleFile(e.target.files[0]);
+                }
+            });
+
+            clearButton.addEventListener('click', () => {
+                resetForm();
+            });
+
+            uploadButton.addEventListener('click', () => {
+                if (!selectedFile) return;
+
+                // 显示加载中和进度条
+                resultContainer.style.display = 'block';
+                loadingSpinner.style.display = 'block';
+                resultContent.style.display = 'none';
+                suggestionCard.style.display = 'none';
+
+                // 创建FormData对象
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+
+                // 确定请求URL
+                const url = fileType === 'image' ? '/predict' : '/predict_video';
+
+                // 如果是视频，显示进度条
+                if (fileType === 'video') {
+                    progressContainer.style.display = 'block';
+                    startProgressCheck(selectedFile.name);
+                }
+
+                // 发送请求
+                fetch(url, {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            return response.json().then(err => {
+                                throw new Error(err.error || '处理文件时发生错误');
+                            });
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (progressInterval) {
+                            clearInterval(progressInterval);
+                            progressInterval = null;
+                        }
+
+                        loadingSpinner.style.display = 'none';
+                        resultContent.style.display = 'block';
+
+                        // 处理预警信息(如果有)
+                        if (fileType === 'video' && data.warnings && data.warnings.length > 0) {
+                            displayWarnings(data.warnings);
+                        } else {
+                            warningContainer.style.display = 'none';
+                        }
+
+                        // 显示结果图像或视频
+                        if (fileType === 'image') {
+                            resultImage.src = data.image_url;
+                            resultImage.style.display = 'block';
+                            resultVideo.style.display = 'none';
+                        } else {
+                            resultVideo.src = data.video_url;
+                            resultVideo.style.display = 'block';
+                            resultImage.style.display = 'none';
+                        }
+
+                        // 显示统计信息
+                        displayStatistics(data.statistics);
+
+                        // 显示检测详情
+                        displayDetections(data.detections);
+
+                        // 显示驾驶建议
+                        if (data.suggestions) {
+                            suggestionContent.textContent = data.suggestions;
+                            suggestionCard.style.display = 'block';
+                        }
+                    })
+                    .catch(error => {
+                        if (progressInterval) {
+                            clearInterval(progressInterval);
+                            progressInterval = null;
+                        }
+
+                        loadingSpinner.style.display = 'none';
+                        resultContent.style.display = 'block';
+                        detectionList.innerHTML = `<div class="alert alert-danger">${error.message || '处理文件时发生错误'}</div>`;
+                    });
+            });
+
+            // 处理选中的文件
+            function handleFile(file) {
+                // 检查文件类型
+                if (!file.type.match('image.*') && !file.type.match('video.*')) {
+                    alert('请上传图片或视频文件');
+                    return;
+                }
+
+                selectedFile = file;
+                fileType = file.type.match('image.*') ? 'image' : 'video';
+
+                // 预览文件
+                previewContainer.style.display = 'block';
+
+                if (fileType === 'image') {
+                    previewImage.src = URL.createObjectURL(file);
+                    previewImage.style.display = 'block';
+                    previewVideo.style.display = 'none';
+                } else {
+                    previewVideo.src = URL.createObjectURL(file);
+                    previewVideo.style.display = 'block';
+                    previewImage.style.display = 'none';
+                }
+
+                // 启用上传和清除按钮
+                uploadButton.disabled = false;
+                clearButton.disabled = false;
+            }
+
+            // 重置表单
+            function resetForm() {
+                selectedFile = null;
+                fileType = null;
+                fileInput.value = '';
+                previewContainer.style.display = 'none';
+                previewImage.src = '';
+                previewVideo.src = '';
+                uploadButton.disabled = true;
+                clearButton.disabled = true;
+                resultContainer.style.display = 'none';
+                progressContainer.style.display = 'none';
+                suggestionCard.style.display = 'none';
+                warningContainer.style.display = 'none';
+
+                // 清除进度检查定时器
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                }
+            }
+
+            // 显示统计信息
+            function displayStatistics(statistics) {
+                if (!statistics) return;
+
+                let html = '';
+
+                // 添加总体统计
+                html += `
+                <div class="stat-item">
+                    <div class="row">
+                        <div class="col-6">
+                            <span class="stat-label">总检测数:</span>
+                        </div>
+                        <div class="col-6 text-end">
+                            <span class="stat-value">${statistics.total_count}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="row">
+                        <div class="col-6">
+                            <span class="stat-label">检测类别数:</span>
+                        </div>
+                        <div class="col-6 text-end">
+                            <span class="stat-value">${statistics.class_count}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="row">
+                        <div class="col-6">
+                            <span class="stat-label">平均置信度:</span>
+                        </div>
+                        <div class="col-6 text-end">
+                            <span class="stat-value">${(statistics.avg_confidence * 100).toFixed(2)}%</span>
+                        </div>
+                    </div>
+                </div>
+                `;
+
+                // 如果是视频，添加视频时长
+                if (statistics.video_duration !== undefined) {
+                    html += `
+                    <div class="stat-item">
+                        <div class="row">
+                            <div class="col-6">
+                                <span class="stat-label">视频时长:</span>
+                            </div>
+                            <div class="col-6 text-end">
+                                <span class="stat-value">${statistics.video_duration.toFixed(2)}秒</span>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }
+
+                statisticsContainer.innerHTML = html;
+            }
+
+            // 显示检测详情
+            function displayDetections(detections) {
+                if (!detections || detections.length === 0) {
+                    detectionList.innerHTML = '<div class="alert alert-info">未检测到任何物体</div>';
+                    return;
+                }
+
+                // 为图像检测，显示所有检测
+                // 为视频检测，按类别分组并显示数量和持续时间
+                if (fileType === 'image') {
+                    let html = '';
+                    detections.forEach((detection, index) => {
+                        const confidence = detection.confidence * 100;
+                        const color = getConfidenceColor(detection.confidence);
+
+                        html += `
+                        <div class="detection-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span>${index + 1}. ${detection.class}</span>
+                                <span class="badge bg-${color}">${confidence.toFixed(2)}%</span>
+                            </div>
+                            <div class="progress confidence-bar">
+                                <div class="progress-bar bg-${color}" role="progressbar" style="width: ${confidence}%"></div>
+                            </div>
+                        </div>
+                        `;
+                    });
+                    detectionList.innerHTML = html;
+                } else {
+                    // 为视频，按类别分组
+                    const groupedByClass = {};
+                    detections.forEach(detection => {
+                        if (!groupedByClass[detection.class]) {
+                            groupedByClass[detection.class] = {
+                                count: 0,
+                                totalConfidence: 0,
+                                maxConfidence: 0,
+                                frames: []
+                            };
+                        }
+
+                        const group = groupedByClass[detection.class];
+                        group.count++;
+                        group.totalConfidence += detection.confidence;
+                        group.maxConfidence = Math.max(group.maxConfidence, detection.confidence);
+                        if (detection.frame !== undefined) {
+                            group.frames.push(detection.frame);
+                        }
+                    });
+
+                    // 从统计信息中获取持续时间
+                    let html = '';
+                    let classDetails = {};
+
+                    // 创建已知的类别映射
+                    if (window.lastStatistics && window.lastStatistics.class_details) {
+                        window.lastStatistics.class_details.forEach(detail => {
+                            classDetails[detail.name] = detail;
+                        });
+                    }
+
+                    // 创建类别ID到颜色的映射
+                    const classColors = {
+                        '安全驾驶': 'success',
+                        '发短信-右': 'danger',
+                        '打电话-右': 'danger',
+                        '发短信-左': 'danger',
+                        '打电话-左': 'danger',
+                        '操作无线电': 'warning',
+                        '喝酒': 'danger',
+                        '向后伸手': 'warning',
+                        '发型和化妆': 'warning',
+                        '与乘客交谈': 'success'
+                    };
+
+                    // 根据检测次数排序类别
+                    const sortedClasses = Object.keys(groupedByClass).sort((a, b) => {
+                        return groupedByClass[b].count - groupedByClass[a].count;
+                    });
+
+                    sortedClasses.forEach(className => {
+                        const group = groupedByClass[className];
+                        const avgConfidence = group.totalConfidence / group.count * 100;
+                        const color = classColors[className] || getConfidenceColor(group.maxConfidence);
+                        
+                        // 获取该类别的持续时间（如果有）
+                        let duration = '';
+                        if (classDetails[className] && classDetails[className].duration !== undefined) {
+                            duration = ` <span class="text-muted">(持续: ${classDetails[className].duration.toFixed(2)}秒)</span>`;
+                        }
+
+                        html += `
+                        <div class="detection-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><strong>${className}</strong>${duration}</span>
+                                <span class="badge bg-${color}">检测次数: ${group.count}</span>
+                            </div>
+                            <div class="small text-muted">平均置信度: ${avgConfidence.toFixed(2)}%</div>
+                            <div class="progress confidence-bar">
+                                <div class="progress-bar bg-${color}" role="progressbar" style="width: ${avgConfidence}%"></div>
+                            </div>
+                        </div>
+                        `;
+                    });
+
+                    detectionList.innerHTML = html;
+                }
+            }
+
+            // 显示预警信息
+            function displayWarnings(warnings) {
+                if (!warnings || warnings.length === 0) {
+                    warningContainer.style.display = 'none';
+                    return;
+                }
+                
+                // 更新预警数量
+                warningCount.textContent = warnings.length;
+                
+                // 生成预警列表HTML
+                let html = '';
+                warnings.forEach((warning, index) => {
+                    html += `
+                    <div class="warning-item">
+                        <div>
+                            <span class="warning-class">${warning.warning_class}</span>
+                            <span class="warning-duration"> - 持续 ${warning.duration}秒</span>
+                        </div>
+                        <div class="warning-frame small">
+                            预警区间: 第${warning.start_frame}帧 - 第${warning.end_frame}帧
+                        </div>
+                    </div>
+                    `;
+                });
+                
+                warningList.innerHTML = html;
+                warningContainer.style.display = 'block';
+                
+                // 添加闪烁效果
+                const warningTitle = document.querySelector('.warning-title i');
+                warningTitle.classList.add('blink');
+            }
+
+            // 获取置信度对应的颜色
+            function getConfidenceColor(confidence) {
+                if (confidence >= 0.7) return 'success';
+                if (confidence >= 0.4) return 'warning';
+                return 'danger';
+            }
+
+            // 启动进度检查
+            function startProgressCheck(filename) {
+                // 重置进度条
+                progressBar.style.width = '0%';
+                progressBar.textContent = '0%';
+                progressText.textContent = '准备处理...';
+
+                progressInterval = setInterval(() => {
+                    fetch(`/progress?filename=${encodeURIComponent(filename)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            const progress = data.progress * 100;
+                            progressBar.style.width = `${progress}%`;
+                            progressBar.textContent = `${Math.round(progress)}%`;
+
+                            if (progress < 1) {
+                                progressText.textContent = '正在准备处理...';
+                            } else if (progress < 25) {
+                                progressText.textContent = '正在分析视频帧...';
+                            } else if (progress < 50) {
+                                progressText.textContent = '正在进行物体检测...';
+                            } else if (progress < 75) {
+                                progressText.textContent = '正在生成结果视频...';
+                            } else if (progress < 100) {
+                                progressText.textContent = '即将完成处理...';
+                            } else {
+                                progressText.textContent = '处理完成！';
+                                clearInterval(progressInterval);
+                                progressInterval = null;
+                            }
+                        })
+                        .catch(error => {
+                            console.error('检查进度时出错:', error);
+                        });
+                }, 1000);
+            }
+        });
+    </script>
+</body>
+</html>
