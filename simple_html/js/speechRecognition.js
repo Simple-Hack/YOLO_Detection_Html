@@ -6,9 +6,9 @@
 
 // 讯飞语音识别API配置
 const XF_SPEECH_CONFIG = {
-    APPID: '1370fc07',
-    APISecret: 'Mzg3ZGYyNjNjMWRhNmU1M2VjODM3NzIz',
-    APIKey: '19e1b632c31ba2a675c95f0f4cdd62c0',
+    APPID: '',
+    APISecret: '',
+    APIKey: '',
     DOMAIN: 'iat', // 接口类型
     LANGUAGE: 'zh_cn', // 语种
     ACCENT: 'mandarin', // 方言，普通话
