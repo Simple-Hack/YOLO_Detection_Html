@@ -931,18 +931,6 @@ def predict_video():
             "warning_class": "向后伸手"
             },
             {
-            "start_frame": 600,
-            "end_frame": 650,
-            "duration": 2.0,
-            "warning_class": "操作无线电"
-            },
-            {
-            "start_frame": 700,
-            "end_frame": 750,
-            "duration": 1.9,
-            "warning_class": "发型和化妆"
-            },
-            {
             "start_frame": 120,
             "end_frame": 178, 
             "duration": 2.4,
