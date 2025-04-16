@@ -505,6 +505,9 @@ function displayWarnings(warnings, videoInfo) {
     // 计算视频帧率，用于时间显示
     const fps = videoInfo && videoInfo.fps ? videoInfo.fps : 30;
     
+    // 播放语音警告
+    playWarningVoice();
+    
     // 创建预警项目
     if (Array.isArray(warnings)) {
         warnings.forEach(warning => {
@@ -598,6 +601,26 @@ function displayWarnings(warnings, videoInfo) {
     
     // 显示预警容器
     warningsContainer.style.display = 'block';
+}
+
+/**
+ * 播放警告语音提示
+ */
+function playWarningVoice() {
+    try {
+        // 如果存在语音合成函数，使用它播放警告
+        if (typeof synthesizeSpeech === 'function') {
+            synthesizeSpeech('检测到预警信息，请注意安全驾驶', {
+                immediate: true, // 立即播放
+                rate: 1.0,       // 正常语速
+                volume: 1.0      // 最大音量
+            });
+        } else {
+            console.warn('语音合成函数不可用，无法播放警告语音');
+        }
+    } catch (error) {
+        console.error('播放警告语音失败:', error);
+    }
 }
 
 /**

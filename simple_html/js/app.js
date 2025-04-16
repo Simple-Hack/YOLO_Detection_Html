@@ -432,6 +432,18 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // 显示图像或视频结果
         if (isVideoFile && data.video_url) {
+
+
+                    // 添加这段代码处理预警
+        if (data.warnings && data.warnings.length > 0) {
+            displayVideoWarnings(data.warnings);
+        } else {
+            // 隐藏预警容器
+            const warningsContainer = document.getElementById('video-warnings-container');
+            if (warningsContainer) {
+                warningsContainer.style.display = 'none';
+            }
+        }
             // 构建完整的视频URL并添加时间戳以避免缓存问题
             const timestamp = new Date().getTime();
             const fullVideoUrl = `${API_BASE_URL}${data.video_url}?t=${timestamp}`;
@@ -973,8 +985,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         });
+
+        // 添加语音播报功能
+        playWarningAudio();
     }
-    
+
+    // 播放语音播报的函数
+    function playWarningAudio() {
+        const message = "检测到预警信息，请注意安全驾驶";
+        const speech = new SpeechSynthesisUtterance(message);
+        speech.lang = 'zh-CN'; // 设置语言为中文
+        window.speechSynthesis.speak(speech);
+        console.log("正在播放语音播报:", message);
+    }
     // 在处理视频结果时调用显示预警函数
     function processVideoResult(results) {
         // ...existing code...

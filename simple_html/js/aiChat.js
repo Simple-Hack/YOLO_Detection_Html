@@ -97,6 +97,9 @@ function initAiChat() {
         // 初始化Web语音识别
         checkSpeechRecognitionSupport();
         
+        // 初始化语音合成功能
+        // initSpeechSynthesis();
+        
         console.log("AI聊天功能初始化成功");
     } catch (error) {
         console.error("AI聊天功能初始化失败:", error);
@@ -426,6 +429,7 @@ function startNewChat() {
 function loadHistoryFromLocalStorage() {
     try {
         const savedHistory = localStorage.getItem('safeDrivingChatHistory');
+        console.log("加载对话历史:", savedHistory);
         if (savedHistory) {
             chatHistory = JSON.parse(savedHistory);
             
@@ -434,11 +438,53 @@ function loadHistoryFromLocalStorage() {
             if (aiChatMessages) {
                 aiChatMessages.innerHTML = '';
                 
+                // 遍历历史记录并添加消息
                 chatHistory.forEach(item => {
                     if (item.role === 'user') {
                         addUserMessage(item.content, false);
                     } else if (item.role === 'assistant') {
-                        addAiMessage(item.content, false);
+                        // 检查消息是否含有思考内容
+                        const content = item.content;
+                        
+                        // 1. 检查原始保存的消息是否有<think>标签
+                        if (content.includes('<think>')) {
+                            addAiMessage(content, false); // 使用原始格式，包含<think>标签
+                        } 
+                        // 2. 检查是否已经有>前缀的引用格式
+                        else if (content.match(/^>\s/m)) {
+                            // 提取思考内容和正文内容
+                            const lines = content.split('\n');
+                            let thinkingLines = [];
+                            let normalLines = [];
+                            
+                            for (let i = 0; i < lines.length; i++) {
+                                if (lines[i].startsWith('> ')) {
+                                    thinkingLines.push(lines[i]);
+                                } else {
+                                    normalLines.push(lines[i]);
+                                }
+                            }
+                            
+                            // 如果有思考内容，重新构造为<think>格式
+                            if (thinkingLines.length > 0) {
+                                const thinkingContent = thinkingLines.join('\n').replace(/^> /gm, '');
+                                const normalContent = normalLines.join('\n');
+                                
+                                // 重新生成带<think>标签的内容
+                                const reconstructedContent = `<think>${thinkingContent}</think>${normalContent}`;
+                                addAiMessage(reconstructedContent, false);
+                            } else {
+                                addAiMessage(content, false);
+                            }
+                        } 
+                        // 3. 如果消息标记为含有思考内容但现在没有标签（兼容旧数据）
+                        else if (item.hasThinkingContent === true) {
+                            addAiMessage(content, false);
+                        }
+                        // 4. 普通消息
+                        else {
+                            addAiMessage(content, false);
+                        }
                     }
                 });
             }
@@ -456,6 +502,9 @@ function loadHistoryFromLocalStorage() {
         // 添加欢迎消息
         addAiMessage("您好！我是安全驾驶助手。请问有什么关于安全驾驶的问题需要咨询吗？");
     }
+    
+    // 加载完成后，滚动到最新消息
+    setTimeout(scrollToLatestMessage, 100);
 }
 
 // 将对话历史保存到localStorage
@@ -519,14 +568,166 @@ function addAiMessage(message, scroll = true) {
     const messageDiv = document.createElement('div');
     messageDiv.className = 'ai-message';
     
-    messageDiv.innerHTML = `
-        <div class="ai-avatar" style="width:40px;height:40px;min-width:40px;max-width:40px;min-height:40px;max-height:40px;flex-shrink:0;overflow:hidden;border-radius:50%;">
-            ${aiAvatar ? `<img src="${aiAvatar}" alt="AI头像" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />` : '<i class="fas fa-robot"></i>'}
-        </div>
-        <div class="ai-message-content">
-            <p>${formatMessage(message)}</p>
-        </div>
-    `;
+    // 检查消息是否包含思考内容（<think>标签或已格式化的>引用）
+    const hasThinkingContent = message.includes('<think>') || message.match(/^>\s/m);
+    
+    // 提取思考时间（如果有）
+    let thinkingTimeText = '已完成';
+    
+    // 查找当前消息对应的历史记录，获取思考时间
+    if (hasThinkingContent && chatHistory && chatHistory.length > 0) {
+        // 尝试在历史记录中查找最近的包含思考时间的AI消息
+        for (let i = chatHistory.length - 1; i >= 0; i--) {
+            const item = chatHistory[i];
+            if (item.role === 'assistant' && item.thinkingTime !== undefined && item.thinkingTime !== null) {
+                thinkingTimeText = `用时 ${item.thinkingTime.toFixed(2)}秒`;
+                break;
+            }
+        }
+    }
+    
+    let formattedMessage = message;
+    
+    // 处理消息内容
+    if (hasThinkingContent) {
+        // 如果包含<think>标签，创建可折叠的思考UI结构
+        if (message.includes('<think>')) {
+            let thinkingContent = '';
+            let normalContent = '';
+            
+            // 提取<think>...</think>部分
+            formattedMessage = message.replace(/<think>([\s\S]*?)<\/think>/g, (match, content) => {
+                thinkingContent = content;
+                return ''; // 从原始消息中移除思考部分
+            });
+            normalContent = formattedMessage.trim(); // 去除可能的前导空白
+            
+            // 创建包含可折叠思考部分的HTML结构
+            messageDiv.innerHTML = `
+                <div class="ai-avatar" style="width:40px;height:40px;min-width:40px;max-width:40px;min-height:40px;max-height:40px;flex-shrink:0;overflow:hidden;border-radius:50%;">
+                    ${aiAvatar ? `<img src="${aiAvatar}" alt="AI头像" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />` : '<i class="fas fa-robot"></i>'}
+                </div>
+                <div class="ai-message-content">
+                    <div class="ai-thinking-block">
+                        <div class="ai-thinking-header">
+                            <div class="ai-thinking-indicator">
+                                <span>思考结束</span>
+                            </div>
+                            <i class="fas fa-chevron-down thinking-toggle-icon"></i>
+                            <div class="ai-thinking-time">${thinkingTimeText}</div>
+                        </div>
+                        <div class="ai-thinking-content">
+                            ${formatMessage(thinkingContent.split('\n').map(line => `> ${line}`).join('\n'))}
+                        </div>
+                    </div>
+                    ${normalContent ? `<p>${formatMessage(normalContent)}</p>` : ''}
+                </div>
+            `;
+            
+            // 添加点击事件用于折叠/展开
+            setTimeout(() => {
+                const thinkingHeader = messageDiv.querySelector('.ai-thinking-header');
+                if (thinkingHeader) {
+                    thinkingHeader.addEventListener('click', function() {
+                        const thinkingContent = this.nextElementSibling;
+                        if (thinkingContent) {
+                            thinkingContent.classList.toggle('collapsed');
+                            const toggleIcon = this.querySelector('.thinking-toggle-icon');
+                            if (toggleIcon) toggleIcon.classList.toggle('collapsed');
+                        }
+                    });
+                }
+            }, 0);
+        } 
+        // 如果是已转换为Markdown引用格式的内容（已有>前缀）
+        else if (message.match(/^>\s/m)) {
+            // 分离思考部分和普通内容
+            const lines = message.split('\n');
+            let thinkingLines = [];
+            let normalLines = [];
+            
+            // 识别连续的引用行作为思考内容
+            for (let i = 0; i < lines.length; i++) {
+                if (lines[i].startsWith('> ')) {
+                    thinkingLines.push(lines[i]);
+                } else {
+                    normalLines.push(lines[i]);
+                }
+            }
+            
+            const thinkingContent = thinkingLines.join('\n');
+            const normalContent = normalLines.join('\n').trim(); // 去除可能的前导空白
+            
+            // 确保思考内容非空，才创建思考区块
+            if (thinkingContent.trim()) {
+                // 创建包含可折叠思考部分的HTML结构
+                messageDiv.innerHTML = `
+                    <div class="ai-avatar" style="width:40px;height:40px;min-width:40px;max-width:40px;min-height:40px;max-height:40px;flex-shrink:0;overflow:hidden;border-radius:50%;">
+                        ${aiAvatar ? `<img src="${aiAvatar}" alt="AI头像" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />` : '<i class="fas fa-robot"></i>'}
+                    </div>
+                    <div class="ai-message-content">
+                        <div class="ai-thinking-block">
+                            <div class="ai-thinking-header">
+                                <div class="ai-thinking-indicator">
+                                    <span>思考结束</span>
+                                </div>
+                                <i class="fas fa-chevron-down thinking-toggle-icon"></i>
+                                <div class="ai-thinking-time">${thinkingTimeText}</div>
+                            </div>
+                            <div class="ai-thinking-content">
+                                ${formatMessage(thinkingContent)}
+                            </div>
+                        </div>
+                        ${normalContent ? `<p>${formatMessage(normalContent)}</p>` : ''}
+                    </div>
+                `;
+                
+                // 添加点击事件用于折叠/展开
+                setTimeout(() => {
+                    const thinkingHeader = messageDiv.querySelector('.ai-thinking-header');
+                    if (thinkingHeader) {
+                        thinkingHeader.addEventListener('click', function() {
+                            const thinkingContent = this.nextElementSibling;
+                            if (thinkingContent) {
+                                thinkingContent.classList.toggle('collapsed');
+                                const toggleIcon = this.querySelector('.thinking-toggle-icon');
+                                if (toggleIcon) toggleIcon.classList.toggle('collapsed');
+                            }
+                        });
+                    }
+                }, 0);
+            } else {
+                // 如果没有有效的思考内容，直接显示正常内容
+                messageDiv.innerHTML = `
+                    <div class="ai-avatar" style="width:40px;height:40px;min-width:40px;max-width:40px;min-height:40px;max-height:40px;flex-shrink:0;overflow:hidden;border-radius:50%;">
+                        ${aiAvatar ? `<img src="${aiAvatar}" alt="AI头像" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />` : '<i class="fas fa-robot"></i>'}
+                    </div>
+                    <div class="ai-message-content">
+                        <p>${formatMessage(message)}</p>
+                    </div>
+                `;
+            }
+        }
+    } else {
+        // 常规消息，无思考部分
+        messageDiv.innerHTML = `
+            <div class="ai-avatar" style="width:40px;height:40px;min-width:40px;max-width:40px;min-height:40px;max-height:40px;flex-shrink:0;overflow:hidden;border-radius:50%;">
+                ${aiAvatar ? `<img src="${aiAvatar}" alt="AI头像" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />` : '<i class="fas fa-robot"></i>'}
+            </div>
+            <div class="ai-message-content">
+                <p>${formatMessage(message)}</p>
+            </div>
+        `;
+    }
+    
+    // 加入到聊天区域之前先检查是否有重复的思考卡片
+    const existingThinkingElements = messageDiv.querySelectorAll('.ai-thinking-block');
+    if (existingThinkingElements.length > 1) {
+        // 保留第一个思考卡片，移除其他重复的
+        for (let i = 1; i < existingThinkingElements.length; i++) {
+            existingThinkingElements[i].remove();
+        }
+    }
     
     aiChatMessages.appendChild(messageDiv);
     
@@ -553,14 +754,16 @@ function addThinkingAnimation() {
     
     thinkingDiv.innerHTML = `
         <div class="ai-avatar">
-            <i class="fas fa-robot"></i>
+            ${aiAvatar ? `<img src="${aiAvatar}" alt="AI头像" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />` : '<i class="fas fa-robot"></i>'}
         </div>
         <div class="ai-message-content">
-            <p>
-                <span class="thinking-dot">.</span>
-                <span class="thinking-dot">.</span>
-                <span class="thinking-dot">.</span>
-            </p>
+            <div class="ai-waiting">
+                <div class="typing-dots">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            </div>
         </div>
     `;
     
@@ -584,17 +787,50 @@ function requestAiResponse(message) {
     // 定义API端点
     const API_BASE_URL = getAPIBaseUrl(); // 从配置模块获取API基础URL
     const askStreamEndpoint = `${API_BASE_URL}/ask_stream`;
+        
+    // 构建消息历史，包含当前用户消息和历史对话
+    const messages = [];
     
-    // 构建请求数据
+    // 添加历史对话到消息列表
+    if (chatHistory && chatHistory.length > 0) {
+        // 遍历历史记录，最多取最近的10条对话（5轮问答）
+        // 限制对话历史长度，避免请求过大
+        const maxHistoryLength = 10;
+        const startIndex = Math.max(0, chatHistory.length - maxHistoryLength);
+        
+        for (let i = startIndex; i < chatHistory.length; i++) {
+            const item = chatHistory[i];
+            messages.push({
+                role: item.role,
+                content: item.content
+            });
+        }
+    }
+    
+    // 添加当前用户消息到消息列表
+    messages.push({
+        role: "user",
+        content: message
+    });
+    // 构建请求数据 - 恢复使用question参数格式
     const requestData = {
         question: message
     };
     
+    // 记录请求数据收到数据块
+    console.log("发送请求数据:", message);
+    
     // 创建一个变量来存储完整响应
     let fullResponse = '';
+    let normalContent = ''; // 新增：单独存储正文内容
     
     // 处理思考标签的变量
     let inThinkMode = false;  // 标记是否在<think>和</think>之间
+    let thinkingStartTime = null; // 记录思考开始时间
+    let thinkingContent = ''; // 记录思考内容
+    let thinkingHeader = null; // 思考标题元素
+    let thinkingContentElement = null; // 思考内容元素
+    let aiMessageElement = null; // AI消息元素
     
     // 使用fetch发送POST请求并手动处理流式响应
     fetch(askStreamEndpoint, {
@@ -616,7 +852,8 @@ function requestAiResponse(message) {
         addAiMessage("", false);
         
         // 获取最新添加的消息元素
-        const aiMessageElement = document.querySelector('.ai-message:last-child .ai-message-content p');
+        const aiMessageContainer = document.querySelector('.ai-message:last-child');
+        aiMessageElement = aiMessageContainer.querySelector('.ai-message-content p');
         
         // 获取读取流的reader
         const reader = response.body.getReader();
@@ -628,6 +865,11 @@ function requestAiResponse(message) {
             if (done) {
                 console.log("流式响应接收完成");
                 
+                // 如果还在思考模式，结束思考
+                if (inThinkMode) {
+                    endThinking();
+                }
+                
                 // 保存完整对话到历史
                 updateChatHistory(message, fullResponse);
                 return;
@@ -635,8 +877,6 @@ function requestAiResponse(message) {
             
             // 解码当前块
             const chunk = decoder.decode(value, { stream: true });
-            console.log("收到数据块:", chunk);
-            
             try {
                 // 尝试将每行作为单独的JSON解析
                 const lines = chunk.split('\n').filter(line => line.trim() !== '');
@@ -650,8 +890,13 @@ function requestAiResponse(message) {
                             // 获取当前数据块的文本
                             const currentText = data.text || '';
                             
-                            // 直接处理当前文本块
-                            processTextDirectly(currentText);
+                            // 判断currentText是否包含<think>或</think>并输出到console
+                            if (currentText==='<think>' || currentText==='</think>') {
+                                console.log(`Detected special tag in text: ${currentText}`);
+                            }
+                            
+                            // 直接处理当前文本块 - 在实时聊天时设置is_real_time=true
+                            processTextDirectly(currentText, true);
                         }
                     } catch (jsonError) {
                         console.warn("无法解析行为JSON:", line, jsonError);
@@ -666,37 +911,231 @@ function requestAiResponse(message) {
         }
         
         // 直接处理文本块 - 实时应用Markdown引用格式
-        function processTextDirectly(text) {
+        function processTextDirectly(text, is_real_time = true) {
             // 检查<think>标签
             if (text === '<think>') {
+                // 标记思考模式
                 inThinkMode = true;
-                return; // 不添加标签本身到响应中
+                thinkingStartTime = new Date();
+                thinkingContent = '';
+                
+                // 在创建新的思考区块前，先检查是否已存在
+                const existingThinkingBlock = document.querySelector('.ai-message:last-child .ai-thinking-block');
+                if (existingThinkingBlock) {
+                    console.log("已存在思考区块，不再创建新的区块");
+                    // 复用现有元素
+                    thinkingHeader = existingThinkingBlock.querySelector('.ai-thinking-header');
+                    thinkingContentElement = existingThinkingBlock.querySelector('.ai-thinking-content');
+                    
+                    // 更新标题内容
+                    if (thinkingHeader) {
+                        thinkingHeader.innerHTML = `
+                            <div class="ai-thinking-indicator">
+                                <span>思考中</span>
+                                <div class="ai-thinking-spinner"></div>
+                            </div>
+                            <i class="fas fa-chevron-down thinking-toggle-icon"></i>
+                            <div class="ai-thinking-time">0.00秒</div>
+                        `;
+                    }
+                    
+                    // 清空思考内容
+                    if (thinkingContentElement) {
+                        thinkingContentElement.innerHTML = '';
+                    }
+                    
+                    // 启动思考时间更新
+                    startThinkingTimer();
+                } else {
+                    // 如果不存在，则创建新的思考区块
+                    startThinking();
+                }
+                
+                // 保留标签本身到fullResponse，用于历史记录
+                fullResponse += '<think>';
+                return;
             }
             
             // 检查</think>标签
             if (text === '</think>') {
-                inThinkMode = false;
-                return; // 不添加标签本身到响应中
+                endThinking();
+                // 保留标签本身到fullResponse，用于历史记录
+                fullResponse += '</think>';
+
+                // 重要修复：清空aiMessageElement的内容，确保思考内容不会显示在正文中
+                if (aiMessageElement) {
+                    aiMessageElement.innerHTML = '';
+                }
+                return;
             }
             
             // 处理思考模式中的文本
             if (inThinkMode) {
-                // 检查是否是新行开始，或者是第一行
-                if (fullResponse.endsWith('\n') || fullResponse === '') {
-                    // 只有在新行开始时才添加 > 前缀
-                    text = `> ${text}`;
-                } else if (text.includes('\n')) {
-                    // 如果当前文本块包含换行符，需要在每个新行前添加 > 
-                    text = text.replace(/\n/g, '\n> ');
+                // 添加到思考内容
+                appendThinkingContent(text);
+                // 同时添加到完整响应，不做转换，保持原始格式
+                fullResponse += text;
+                
+                // 重要修复：思考模式下不向正文添加内容
+                // 之前这里没有阻止思考内容添加到正文，导致重复显示
+            } else {
+                // 常规文本，直接添加
+                fullResponse += text;
+                
+                // 创建一个副本用于显示，过滤掉思考部分
+                // 注意：这里只在当前实时显示时过滤，不修改保存到历史记录的fullResponse内容
+                let displayContent = fullResponse;
+                normalContent += text; // 新增：正文内容单独累加
+                // 仅当是实时聊天时才过滤思考内容，加载历史记录时不过滤
+                if (is_real_time) {
+                    displayContent = displayContent.replace(/<think>[\s\S]*?<\/think>/g, '');
+                }
+                
+                updateAiMessageContent(normalContent);
+            }
+        }
+        
+        // 开始思考模式
+        function startThinking() {
+            inThinkMode = true;
+            thinkingStartTime = new Date();
+            thinkingContent = '';
+            
+            // 创建思考容器 - 确保只创建一次
+            if (!thinkingHeader) {
+                const thinkingBlock = document.createElement('div');
+                thinkingBlock.className = 'ai-thinking-block';
+                
+                // 创建思考标题
+                thinkingHeader = document.createElement('div');
+                thinkingHeader.className = 'ai-thinking-header';
+                thinkingHeader.innerHTML = `
+                    <div class="ai-thinking-indicator">
+                        <span>思考中</span>
+                        <div class="ai-thinking-spinner"></div>
+                    </div>
+                    <i class="fas fa-chevron-down thinking-toggle-icon"></i>
+                    <div class="ai-thinking-time">0.00秒</div>
+                `;
+                
+                // 创建思考内容
+                thinkingContentElement = document.createElement('div');
+                thinkingContentElement.className = 'ai-thinking-content';
+                
+                // 添加到AI消息中
+                thinkingBlock.appendChild(thinkingHeader);
+                thinkingBlock.appendChild(thinkingContentElement);
+                
+                // 只有当父元素存在时才添加
+                if (aiMessageElement && aiMessageElement.parentNode) {
+                    // 检查是否已存在思考区块，如果有则先移除
+                    const existingThinkingBlock = aiMessageElement.parentNode.querySelector('.ai-thinking-block');
+                    if (existingThinkingBlock) {
+                        existingThinkingBlock.remove();
+                    }
+                    
+                    aiMessageElement.parentNode.insertBefore(thinkingBlock, aiMessageElement);
+                }
+                
+                // 添加点击事件用于折叠/展开
+                thinkingHeader.addEventListener('click', toggleThinking);
+                
+                // 启动思考时间更新
+                startThinkingTimer();
+            }
+        }
+        
+        // 添加思考内容
+        function appendThinkingContent(text) {
+            thinkingContent += text;
+            
+            // 更新思考内容显示
+            if (thinkingContentElement) {
+                // 先将文本转换为Markdown格式(主要是保留换行)
+                const formattedContent = thinkingContent
+                    .split('\n')
+                    .map(line => line ? `> ${line}` : '>')
+                    .join('\n');
+                
+                thinkingContentElement.innerHTML = formatMessage(formattedContent);
+                scrollToLatestMessage();
+            }
+        }
+        
+        // 结束思考模式
+        function endThinking() {
+            inThinkMode = false;
+            
+            if (thinkingHeader) {
+                // 停止思考时间计时器
+                stopThinkingTimer();
+                
+                // 计算思考时间
+                const thinkingEndTime = new Date();
+                const thinkingDuration = (thinkingEndTime - thinkingStartTime) / 1000;
+                
+                // 更新思考标题
+                const thinkingTimeDisplay = thinkingHeader.querySelector('.ai-thinking-time');
+                if (thinkingTimeDisplay) {
+                    thinkingTimeDisplay.textContent = `用时 ${thinkingDuration.toFixed(2)}秒`;
+                }
+                
+                // 更新样式，移除spinner
+                const thinkingIndicator = thinkingHeader.querySelector('.ai-thinking-indicator');
+                if (thinkingIndicator) {
+                    thinkingIndicator.innerHTML = '<span>思考结束</span>';
                 }
             }
-            
-            // 添加到完整响应
-            fullResponse += text;
-            
-            // 更新AI消息元素
+        }
+        
+        // 切换思考内容的显示/隐藏
+        function toggleThinking() {
+            if (thinkingContentElement) {
+                thinkingContentElement.classList.toggle('collapsed');
+                
+                // 更新箭头方向
+                const toggleIcon = thinkingHeader.querySelector('.thinking-toggle-icon');
+                if (toggleIcon) {
+                    toggleIcon.classList.toggle('collapsed');
+                }
+            }
+        }
+        
+        // 启动思考时间更新计时器
+        function startThinkingTimer() {
+            const timeDisplay = thinkingHeader.querySelector('.ai-thinking-time');
+            const updateTimer = setInterval(() => {
+                if (!inThinkMode) {
+                    clearInterval(updateTimer);
+                    return;
+                }
+                
+                const currentTime = new Date();
+                const elapsedSeconds = (currentTime - thinkingStartTime) / 1000;
+                timeDisplay.textContent = `${elapsedSeconds.toFixed(2)}秒`;
+            }, 50); // 每50毫秒更新一次，使计时更流畅
+        }
+        
+        // 停止思考时间计时器
+        function stopThinkingTimer() {
+            // 计时器在startThinkingTimer内部创建和清除，这里不需要额外操作
+        }
+        
+        // 更新AI消息内容
+        function updateAiMessageContent(content) {
             if (aiMessageElement) {
-                aiMessageElement.innerHTML = formatMessage(fullResponse);
+                // 先删除现有的可能是临时的内容
+                while (aiMessageElement.firstChild) {
+                    aiMessageElement.removeChild(aiMessageElement.firstChild);
+                }
+                // 检查是否已经存在formatMessage格式化的内容
+                if (content.includes('<div class="markdown-content">')) {
+                    // 如果已经是HTML内容，直接设置
+                    aiMessageElement.innerHTML = content;
+                } else {
+                    // 否则先格式化再设置
+                    aiMessageElement.innerHTML = formatMessage(content);
+                }
                 scrollToLatestMessage();
             }
         }
@@ -716,18 +1155,52 @@ function requestAiResponse(message) {
 
 // 更新对话历史
 function updateChatHistory(userMessage, aiResponse) {
+    // 记录当前时间，用于计算保存时间
+    const saveTime = new Date().toISOString();
+    
+    // 提取思考时间（如果有的话）
+    let thinkingTime = null;
+    if (aiResponse.includes('<think>') && aiResponse.includes('</think>')) {
+        const thinkingHeader = document.querySelector('.ai-thinking-header');
+        if (thinkingHeader) {
+            const timeDisplay = thinkingHeader.querySelector('.ai-thinking-time');
+            if (timeDisplay) {
+                const timeText = timeDisplay.textContent;
+                // 提取数字部分（如"用时 3.45秒"中的3.45）
+                const timeMatch = timeText.match(/(\d+\.\d+)/);
+                if (timeMatch && timeMatch[1]) {
+                    thinkingTime = parseFloat(timeMatch[1]);
+                }
+            }
+        }
+    }
+    
+    // 添加用户消息到历史
     chatHistory.push({
         role: 'user',
-        content: userMessage
+        content: userMessage,
+        timestamp: saveTime
     });
     
+    // 保存AI响应，包含原始格式（带<think>标签）和思考时间
     chatHistory.push({
         role: 'assistant',
-        content: aiResponse
+        content: aiResponse,
+        hasThinkingContent: aiResponse.includes('<think>'),
+        thinkingTime: thinkingTime,
+        timestamp: saveTime
     });
     
     // 保存对话历史到本地存储
     saveHistoryToLocalStorage();
+    
+    // 调试输出
+    console.log("保存历史记录: ", {
+        userMessage: userMessage.length + " 字符",
+        aiResponse: aiResponse.length + " 字符",
+        hasThinking: aiResponse.includes('<think>'),
+        thinkingTime: thinkingTime
+    });
 }
 
 // 显示提示消息
@@ -805,7 +1278,7 @@ function removeVoiceRecognitionHint() {
 function formatMessage(message) {
     // 如果消息是undefined或null则返回空字符串
     if (!message) return '';
-    console.log("格式化消息:", message); // 调试日志
+    
     // 处理<think>和</think>标签，将其转换为Markdown引用格式，而不是注释格式
     message = message.replace(/<think>([\s\S]*?)<\/think>/g, (match, content) => {
         // 按行分割内容，每行添加>前缀
@@ -1002,3 +1475,166 @@ function updateMicrophoneAnimation(level) {
         }
     }
 }
+
+// 创建思考区块UI元素
+function createThinkingBlock(thinkingContent) {
+    const thinkingBlock = document.createElement('div');
+    thinkingBlock.className = 'ai-thinking-block';
+    
+    // 创建思考标题
+    const thinkingHeader = document.createElement('div');
+    thinkingHeader.className = 'ai-thinking-header';
+    thinkingHeader.innerHTML = `
+        <div class="ai-thinking-indicator">
+            <span>思考结束</span>
+        </div>
+        <i class="fas fa-chevron-down thinking-toggle-icon"></i>
+        <div class="ai-thinking-time">已完成</div>
+    `;
+    
+    // 创建思考内容容器
+    const thinkingContentElement = document.createElement('div');
+    thinkingContentElement.className = 'ai-thinking-content';
+    
+    // 格式化思考内容 - 确保每行前面有 > 前缀
+    const formattedContent = thinkingContent
+        .split('\n')
+        .map(line => line.trim() ? `> ${line}` : '>')
+        .join('\n');
+    
+    thinkingContentElement.innerHTML = formatMessage(formattedContent);
+    
+    // 添加到思考区块
+    thinkingBlock.appendChild(thinkingHeader);
+    thinkingBlock.appendChild(thinkingContentElement);
+    
+    // 添加点击事件用于折叠/展开
+    thinkingHeader.addEventListener('click', function() {
+        thinkingContentElement.classList.toggle('collapsed');
+        const toggleIcon = this.querySelector('.thinking-toggle-icon');
+        if (toggleIcon) {
+            toggleIcon.classList.toggle('collapsed');
+        }
+    });
+    
+    return thinkingBlock;
+}
+
+/**
+ * 初始化语音合成功能
+ */
+function initSpeechSynthesis() {
+    // 检查浏览器是否支持语音合成API
+    if (!('speechSynthesis' in window)) {
+        console.warn("当前浏览器不支持语音合成API");
+        return false;
+    }
+    
+    // 预加载默认中文语音
+    loadChineseVoice();
+    
+    console.log("语音合成功能初始化完成");
+    return true;
+}
+
+/**
+ * 预加载中文语音
+ */
+function loadChineseVoice() {
+    // 延迟执行以确保语音合成API已完全加载
+    setTimeout(() => {
+        if (!window.speechSynthesis) return;
+        
+        // 获取所有可用的语音
+        const voices = window.speechSynthesis.getVoices();
+        
+        // 寻找中文语音
+        window.chineseVoice = voices.find(voice => 
+            voice.lang.includes('zh') || 
+            voice.name.includes('Chinese') || 
+            voice.name.includes('普通话') || 
+            voice.name.includes('国语')
+        );
+        
+        if (window.chineseVoice) {
+            console.log(`已加载中文语音: ${window.chineseVoice.name}`);
+        } else {
+            console.log("未找到中文语音，将使用系统默认语音");
+        }
+    }, 100);
+    
+    // 针对某些浏览器需要在voiceschanged事件中获取
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = loadChineseVoice;
+    }
+}
+
+/**
+ * 文本转语音合成并播放
+ * @param {string} text 要播放的文本
+ * @param {Object} options 播放选项
+ * @param {boolean} options.immediate 是否立即播放(中断当前播放)
+ * @param {number} options.rate 语速 (0.1-10)
+ * @param {number} options.pitch 音调 (0-2)
+ * @param {number} options.volume 音量 (0-1)
+ * @returns {SpeechSynthesisUtterance} 语音合成对象
+ */
+function synthesizeSpeech(text, options = {}) {
+    if (!('speechSynthesis' in window)) {
+        console.warn("当前浏览器不支持语音合成API");
+        return null;
+    }
+    
+    // 设置默认选项
+    const defaultOptions = {
+        immediate: false, // 是否立即播放(中断当前播放)
+        rate: 1.0,        // 语速 (0.1-10)
+        pitch: 1.0,       // 音调 (0-2)
+        volume: 1.0       // 音量 (0-1)
+    };
+    
+    // 合并选项
+    const mergedOptions = { ...defaultOptions, ...options };
+    
+    // 如果需要立即播放，停止当前所有语音
+    if (mergedOptions.immediate) {
+        window.speechSynthesis.cancel();
+    }
+    
+    // 创建语音合成对象
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // 设置语音参数
+    utterance.rate = mergedOptions.rate;    // 语速
+    utterance.pitch = mergedOptions.pitch;  // 音调
+    utterance.volume = mergedOptions.volume; // 音量
+    
+    // 设置语音为中文(如果已加载)
+    if (window.chineseVoice) {
+        utterance.voice = window.chineseVoice;
+        utterance.lang = window.chineseVoice.lang; // 设置语言
+    } else {
+        utterance.lang = 'zh-CN'; // 默认设置为中文
+    }
+    
+    // 添加事件监听
+    utterance.onstart = () => {
+        console.log(`开始播放语音: "${text.substring(0, 20)}${text.length > 20 ? '...' : ''}"`);
+    };
+    
+    utterance.onend = () => {
+        console.log("语音播放完成");
+    };
+    
+    utterance.onerror = (event) => {
+        console.error("语音播放出错:", event.error);
+    };
+    
+    // 播放语音
+    window.speechSynthesis.speak(utterance);
+    
+    return utterance;
+}
+
+// 使语音合成功能全局可用
+window.synthesizeSpeech = synthesizeSpeech;

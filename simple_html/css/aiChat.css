@@ -19,45 +19,155 @@
     display: flex !important;
 }
 
-/* AI聊天全屏界面头部 */
-.ai-chat-fullscreen-header {
+/* AI思考部分样式 */
+.ai-thinking-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 15px 20px;
-    background-color: #0078d7; /* 更鲜明的头部颜色 */
-    color: white;
-    border-bottom: 1px solid #e9ecef;
-}
-
-.ai-chat-fullscreen-header h2 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: white;
-}
-
-.back-button, .new-chat-button {
-    background: none;
-    border: none;
-    color: white;
-    border-radius: 4px;
-    padding: 8px 12px;
+    padding: 5px 10px;
+    background-color: rgba(0, 0, 0, 0.04);
+    color: #666;
+    font-size: 0.85rem;
+    border-radius: 8px 8px 0 0;
     cursor: pointer;
+    transition: background-color 0.2s;
+    user-select: none;
+}
+
+.ai-thinking-header:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+
+.ai-thinking-indicator {
     display: flex;
     align-items: center;
     gap: 5px;
-    transition: background-color 0.3s;
-    box-shadow: none;
 }
 
-.back-button:hover, .new-chat-button:hover {
-    background-color: rgba(255, 255, 255, 0.2);
-    transform: none;
-    box-shadow: none;
+.ai-thinking-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(0, 120, 215, 0.2);
+    border-top-color: rgba(0, 120, 215, 0.8);
+    border-radius: 50%;
+    animation: thinking-spinner 1s infinite linear;
 }
 
-.back-button i, .new-chat-button i {
+@keyframes thinking-spinner {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.ai-thinking-time {
+    margin-left: auto;
+    font-size: 0.8rem;
+}
+
+.ai-thinking-content {
+    border-left: 3px solid #ddd;
+    padding: 10px;
+    margin-top: 0;
+    background-color: rgba(0, 0, 0, 0.02);
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+.ai-thinking-content.collapsed {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin: 0;
+    border: none;
+}
+
+/* AI等待回复的动画样式 */
+.ai-waiting {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    background-color: rgba(0, 120, 215, 0.6);
+    border-radius: 50%;
+    animation: typing-dot 1.5s infinite ease-in-out;
+}
+
+.typing-dot:nth-child(1) { animation-delay: 0s; }
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing-dot {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.6;
+    }
+    30% {
+        transform: translateY(-7px);
+        opacity: 1;
+    }
+}
+
+/* 思考箭头指示器 */
+.thinking-toggle-icon {
+    margin-left: 5px;
+    transition: transform 0.3s;
+}
+
+.thinking-toggle-icon.collapsed {
+    transform: rotate(-90deg);
+}
+
+/* AI消息样式调整，添加相对定位以便放置思考标题 */
+.ai-message {
+    display: flex;
+    align-self: flex-start;
+    max-width: 80%;
+    gap: 10px;
+    flex-direction: row; /* 确保AI头像在左侧 */
+    position: relative; /* 添加相对定位 */
+}
+
+/* 思考模式的Markdown样式调整 */
+.ai-message-content blockquote {
+    margin: 0;
+    border-left-color: #a8c7dc;
+    background-color: rgba(0, 120, 215, 0.05);
+}
+
+.ai-message-content .ai-thinking-block {
+    margin: 0;
+}
+
+/* 显示AI正在输入的指示器 */
+.ai-typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 15px;
+    background-color: #f1f3f4;
+    border-radius: 18px 18px 18px 0;
+    margin-top: 10px;
+}
+
+.ai-typing-indicator .typing-text {
+    color: #666;
     font-size: 0.9rem;
+}
+
+.ai-typing-indicator .typing-dots {
+    display: flex;
+    gap: 4px;
 }
 
 /* 聊天内容区域 */
@@ -126,33 +236,33 @@
     align-self: flex-end !important;
     max-width: 80% !important;
     gap: 10px !important;
-    /* flex-direction: row-reverse !important; 使用!important确保不被覆盖 */
+    /* flex-direction: row-reverse  ; 使用!重要确保不被覆盖 */
 }
 
 /* 头像基础样式 - 统一用户和AI头像大小 */
 .user-avatar, .ai-avatar {
-    width: 40px !important; /* 使用!important确保不被覆盖 */
-    height: 40px !important;
-    min-width: 40px !important; /* 添加最小宽度防止缩小 */
-    min-height: 40px !important;
-    max-width: 40px !important; /* 添加最大宽度防止扩大 */
-    max-height: 40px !important;
-    border-radius: 50% !important;
-    display: flex !important;
-    justify-content: center !important;
-    align-items: center !important;
+    width: 40px  ; /* 使用 确保不被覆盖 */
+    height: 40px  ;
+    min-width: 40px  ; /* 添加最小宽度防止缩小 */
+    min-height: 40px  ;
+    max-width: 40px  ; /* 添加最大宽度防止扩大 */
+    max-height: 40px  ;
+    border-radius: 50%  ;
+    display: flex  ;
+    justify-content: center  ;
+    align-items: center  ;
     font-size: 1.2rem;
-    flex-shrink: 0 !important; /* 防止头像被压缩 */
-    overflow: hidden !important; /* 确保内容不溢出 */
-    position: relative !important; /* 用于定位内部元素 */
+    flex-shrink: 0  ; /* 防止头像被压缩 */
+    overflow: hidden  ; /* 确保内容不溢出 */
+    position: relative  ; /* 用于定位内部元素 */
 }
 
 /* 头像图片样式 - 确保图片正确显示 */
 .user-avatar img, .ai-avatar img {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover !important;
-    border-radius: 50% !important;
+    width: 100%  ;
+    height: 100%  ;
+    object-fit: cover  ;
+    border-radius: 50%  ;
 }
 
 /* 用户和AI头像的不同背景色 */
@@ -187,6 +297,7 @@
     max-width: 80%;
     gap: 10px;
     flex-direction: row; /* 确保AI头像在左侧 */
+    position: relative; /* 添加相对定位 */
 }
 
 .ai-message-content {

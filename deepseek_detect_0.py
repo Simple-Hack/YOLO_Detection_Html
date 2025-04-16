@@ -214,7 +214,7 @@ def load_language_model():
         model_loading_in_progress = False  # 设置加载完成状态
         return True
     except Exception as e:
-        model_loading_in_progress = False  # 设置加载失败状态
+        model_loading_in_progress = False  
         import traceback
         print(f"语言模型加载失败，错误信息: {e}")
         print("详细错误堆栈:")
@@ -247,9 +247,9 @@ def call_ollama(prompt):
             }
         }
         
-        # 设置最大重试次数
+        # TODO 设置最大重试次数 
         max_retries = 3
-        retry_count = 0
+        retry_count = 0 
         
         while retry_count < max_retries:
             try:
@@ -967,11 +967,11 @@ def predict_video():
         detected_classes = [d['class'] for d in all_detections]
         detected_classes_dict={
             "喝酒":0,
-            "发短信-右":0,
-            "打电话-右":0,
-            "发短信-左":0,
-            "打电话-左":0,
-            "操作无线电":0,
+            "发短信 - 右":0,
+            "打电话 - 右":0,
+            "发短信 - 左":0,
+            "打电话 - 左":0,
+            "作无线电":0,
             "向后伸手":0,
             "发型和化妆":0,
             "与乘客交谈":0,
@@ -979,11 +979,11 @@ def predict_video():
         }
         detected_warning_classes = {
             "喝酒":0,
-            "发短信-右":0,
-            "打电话-右":0,
-            "发短信-左":0,
-            "打电话-左":0,
-            "操作无线电":0,
+            "发短信 - 右":0,
+            "打电话 - 右":0,
+            "发短信 - 左":0,
+            "打电话 - 左":0,
+            "作无线电":0,
             "向后伸手":0,
             "发型和化妆":0,
             "与乘客交谈":0,
